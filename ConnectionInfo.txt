@@ -1,0 +1,56 @@
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using MySql.Data.MySqlClient;
+
+namespace PolomkaApp.Classes
+{
+    internal class ConnectionInfo
+    {
+        static public string connectionStr = @"Database=polomka_chesnokov;
+                                             Data Source=localhost;
+                                             user=root; 
+                                             password=qwerty;
+                                             charset = utf8;"
+        ;
+
+        static public MySqlConnection sqlConnection;
+        static public MySqlCommand commandExecutor;
+
+        static public DataTable dtUsersOrders = new DataTable();
+        static public MySqlDataAdapter myDataAdapter;
+
+        static public bool tryConnect_BD()
+        {
+            try
+            {
+                sqlConnection = new MySqlConnection(connectionStr);
+                sqlConnection.Open();
+                commandExecutor = new MySqlCommand();
+                commandExecutor.Connection = sqlConnection;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show("Ошибка при подключении к БД:", ex.ToString());
+                return false;
+            }
+        }
+
+        static public void close_BD()
+        {
+            try
+            {
+                sqlConnection.Close();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show("Ошибка при отключении от БД:", ex.ToString());
+            }
+        }
+    }
+}

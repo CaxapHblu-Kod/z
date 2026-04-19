@@ -1,0 +1,300 @@
+using MySql.Data.MySqlClient;
+using MySqlX.XDevAPI;
+using PolomkaApp.Classes;
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Diagnostics.Contracts;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.ListView;
+
+namespace PolomkaApp.Requests
+{
+    class ClientRow 
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Patronymic { get; set; }
+        public string Birthday { get; set; }
+        public string RegistrationDate { get; set; }
+        public string Email { get; set; }
+        public string Phone { get; set; }
+        public string GenderCode { get; set; }
+        public string PhotoPath { get; set; }
+        public string LastVisit { get; set; }
+        public int CountVisit { get; set; }
+    }
+
+    class Client
+    {
+        //Принять данные с проверками
+        static private string GetSafeString(MySqlDataReader reader, string columnName)
+        {
+            int ordinal = reader.GetOrdinal(columnName);
+            return reader.IsDBNull(ordinal) ? string.Empty : reader.GetString(ordinal);
+        }
+        static private int GetSafeInt(MySqlDataReader reader, string columnName)
+        {
+            int ordinal = reader.GetOrdinal(columnName);
+            return reader.IsDBNull(ordinal) ? 0 : reader.GetInt32(ordinal);
+        }
+        static private string GetSafeDateString(MySqlDataReader reader, string columnName)
+        {
+            try
+            {
+                int ordinal = reader.GetOrdinal(columnName);
+                if (reader.IsDBNull(ordinal))
+                    return string.Empty;
+
+                if (reader.GetFieldType(ordinal) == typeof(DateTime))
+                    return reader.GetDateTime(ordinal).ToString("dd.MM.yyyy");
+
+                return reader.GetString(ordinal);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        //Методы работы с бд
+        public List<ClientRow> getClients()
+        {
+            List<ClientRow> clients = new List<ClientRow>();
+
+            try
+            {
+                string sql = @"
+                SELECT 
+                    c.ID, 
+                    c.FirstName, 
+                    c.LastName, 
+                    c.Patronymic, 
+                    c.Birthday,
+                    c.RegistrationDate, 
+                    c.Email, 
+                    c.Phone, 
+                    g.Name as GenderName, 
+                    c.PhotoPath,
+                    (SELECT MAX(StartTime) FROM clientservice WHERE ClientID = c.ID) as LastVisit,
+                    (SELECT COUNT(*) FROM clientservice WHERE ClientID = c.ID) as VisitCount
+                FROM client c
+                LEFT JOIN gender g ON c.GenderCode = g.Code
+                ORDER BY c.LastName, c.FirstName";
+
+                using (var command = new MySqlCommand(sql, ConnectionInfo.sqlConnection))
+                {
+                    if (ConnectionInfo.sqlConnection.State != System.Data.ConnectionState.Open)
+                        ConnectionInfo.sqlConnection.Open();
+
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            clients.Add(new ClientRow
+                            {
+                                Id = GetSafeInt(reader, "ID"),
+                                FirstName = GetSafeString(reader, "FirstName"),
+                                LastName = GetSafeString(reader, "LastName"),
+                                Patronymic = GetSafeString(reader, "Patronymic"),
+                                Birthday = GetSafeDateString(reader, "Birthday"),
+                                RegistrationDate = GetSafeDateString(reader, "RegistrationDate"),
+                                Email = GetSafeString(reader, "Email"),
+                                Phone = GetSafeString(reader, "Phone"),
+                                GenderCode = GetSafeString(reader, "GenderName"),
+                                PhotoPath = GetSafeString(reader, "PhotoPath"),
+                                LastVisit = GetSafeDateString(reader, "LastVisit"),
+                                CountVisit = GetSafeInt(reader, "VisitCount")
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при получении списка клиентов: {ex.Message}");
+            }
+
+            return clients;
+        }
+        static public List<string> getClientAsList(int idClient)
+        {
+            List<string> client = new List<string>();
+
+            try
+            {
+                string sql = $@"
+                SELECT 
+                    c.ID, 
+                    c.FirstName, 
+                    c.LastName, 
+                    c.Patronymic, 
+                    c.Birthday,
+                    c.RegistrationDate, 
+                    c.Email, 
+                    c.Phone, 
+                    g.Name as GenderName, 
+                    c.PhotoPath,
+                    (SELECT MAX(StartTime) FROM clientservice WHERE ClientID = c.ID) as LastVisit,
+                    (SELECT COUNT(*) FROM clientservice WHERE ClientID = c.ID) as VisitCount
+                FROM client c
+                LEFT JOIN gender g ON c.GenderCode = g.Code
+                WHERE c.ID = {idClient}";
+
+                using (var command = new MySqlCommand(sql, ConnectionInfo.sqlConnection))
+                {
+                    if (ConnectionInfo.sqlConnection.State != System.Data.ConnectionState.Open)
+                        ConnectionInfo.sqlConnection.Open();
+
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            client.Add(GetSafeInt(reader, "ID").ToString());
+                            client.Add(GetSafeString(reader, "FirstName"));
+                            client.Add(GetSafeString(reader, "LastName"));
+                            client.Add(GetSafeString(reader, "Patronymic"));
+                            client.Add(GetSafeDateString(reader, "Birthday"));
+                            client.Add(GetSafeDateString(reader, "RegistrationDate"));
+                            client.Add(GetSafeString(reader, "Email"));
+                            client.Add(GetSafeString(reader, "Phone"));
+                            client.Add(GetSafeString(reader, "GenderName"));
+                            client.Add(GetSafeString(reader, "PhotoPath"));
+                            client.Add(GetSafeDateString(reader, "LastVisit"));
+                            client.Add(GetSafeInt(reader, "VisitCount").ToString());
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при получении клиента: {ex.Message}");
+            }
+
+            return client;
+        }
+        public List<ClientRow> getClientsWhere(string orderStr)
+        {
+            List<ClientRow> clients = new List<ClientRow>();
+
+            try
+            {
+                string sql = $@"SELECT c.ID, c.FirstName, c.LastName, c.Patronymic, c.Birthday,
+                                c.RegistrationDate, c.Email, c.Phone, g.Name, c.PhotoPath
+                                FROM client c, gender g WHERE c.genderCode = g.Code AND {orderStr};";
+                ConnectionInfo.commandExecutor.CommandText = sql;
+
+                using (var command = new MySqlCommand(sql, ConnectionInfo.sqlConnection))
+                {
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            clients.Add(new ClientRow
+                            {
+                                Id = int.Parse(reader["ID"].ToString()),
+                                FirstName = reader["FirstName"].ToString(),
+                                LastName = reader["LastName"].ToString(),
+                                Patronymic = reader["Patronymic"].ToString(),
+                                Birthday = reader["Birthday"].ToString(),
+                                RegistrationDate = reader["RegistrationDate"].ToString(),
+                                Email = reader["Email"].ToString(),
+                                Phone = reader["Phone"].ToString(),
+                                GenderCode = reader["Name"].ToString(),
+                                PhotoPath = reader["PhotoPath"].ToString()
+                            });
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                System.Windows.Forms.MessageBox.Show("Ошибка при получаении списка клиентов!!!");
+            }
+            return clients;
+        }
+
+
+        //Реализовать
+        //public int Id { get; set; }
+        //public string FirstName { get; set; }
+        //public string LastName { get; set; }
+        //public string Patronymic { get; set; }
+        //public string Birthday { get; set; }
+        //public string RegistrationDate { get; set; }
+        //public string Email { get; set; }
+        //public string Phone { get; set; }
+        //public string GenderCode { get; set; }
+        //public string PhotoPath { get; set; }
+        //public string LastVisit { get; set; }
+        //public int CountVisit { get; set; }
+        static public bool InsertClient(ClientRow client)
+        {
+            string sql = @"INSERT INTO client (FirstName, LastName, Patronymic, Birthday,
+                    RegistrationDate, Email, Phone, GenderCode, PhotoPath) 
+                    VALUES (@First, @Last, @Patro, @Birth, @regDate, @mail, @phoneNumber,
+                    @gender, @photo)";
+
+            try
+            {
+                using (var command = new MySqlCommand(sql, ConnectionInfo.sqlConnection))
+                {
+                    command.Parameters.AddWithValue("@First", client.FirstName);
+                    command.Parameters.AddWithValue("@Last", client.LastName);
+                    command.Parameters.AddWithValue("@Patro", client.Patronymic);
+                    command.Parameters.AddWithValue("@Birth", client.Birthday);
+                    command.Parameters.AddWithValue("@regDate", client.RegistrationDate);
+                    command.Parameters.AddWithValue("@mail", client.Email);
+                    command.Parameters.AddWithValue("@phoneNumber", client.Phone);
+                    command.Parameters.AddWithValue("@gender", client.GenderCode);
+                    command.Parameters.AddWithValue("@photo", client.PhotoPath);
+
+                    int rowsAffected = command.ExecuteNonQuery();
+                    return rowsAffected > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при добавлении клиента: \n{ex.Message}");
+                return false;
+            }
+        }
+
+        static public bool UpdateClient(ClientRow client)
+        {
+            string sql = @"UPDATE client SET FirstName = @First, LastName =@Last,
+                            Patronymic = @Patro, Birthday = @Birth, 
+                            Email = @mail, Phone = @phoneNumber, 
+                            GenderCode = @gender, PhotoPath = @photo)
+                            WHERE ID = @idClient";
+
+            try
+            {
+                using (var command = new MySqlCommand(sql, ConnectionInfo.sqlConnection))
+                {
+                    command.Parameters.AddWithValue("@idClient", client.Id);
+                    command.Parameters.AddWithValue("@First", client.FirstName);
+                    command.Parameters.AddWithValue("@Last", client.LastName);
+                    command.Parameters.AddWithValue("@Patro", client.Patronymic);
+                    command.Parameters.AddWithValue("@Birth", client.Birthday);
+                    command.Parameters.AddWithValue("@mail", client.Email);
+                    command.Parameters.AddWithValue("@phoneNumber", client.Phone);
+                    command.Parameters.AddWithValue("@gender", client.GenderCode);
+                    command.Parameters.AddWithValue("@photo", client.PhotoPath);
+
+                    int rowsAffected = command.ExecuteNonQuery();
+                    return rowsAffected > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при добавлении клиента: \n{ex.Message}");
+                return false;
+            }
+        }
+    }
+}
